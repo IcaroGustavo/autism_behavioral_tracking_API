@@ -27,7 +27,7 @@ public class BehaviorEvent {
 
 	@Id
 	@GeneratedValue(generator = "UUID")
-	@GenericGenerator(name = "UUID")
+	@GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
 	@Column(name = "id", updatable = false, nullable = false, columnDefinition = "uuid")
 	private UUID id;
 
