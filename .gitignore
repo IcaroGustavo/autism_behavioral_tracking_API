@@ -1,3 +1,37 @@
+# Build outputs
+/target/
+/build/
+/out/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+.factorypath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Dependencies
+/node_modules/
+
+# Spring
+.springBeans
+
+# Others
+*.swp
+*.swo
+*.tmp
+*.bak
+
 # Compiled class file
 *.class
 
