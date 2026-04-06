@@ -1,5 +1,6 @@
 package com.autismtracker.security;
 
+import com.autismtracker.security.tenant.TenantFilterActivationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,10 +22,12 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthFilter;
 	private final CustomUserDetailsService userDetailsService;
+	private final TenantFilterActivationFilter tenantFilterActivationFilter;
 
-	public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, CustomUserDetailsService userDetailsService) {
+	public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, CustomUserDetailsService userDetailsService, TenantFilterActivationFilter tenantFilterActivationFilter) {
 		this.jwtAuthFilter = jwtAuthFilter;
 		this.userDetailsService = userDetailsService;
+		this.tenantFilterActivationFilter = tenantFilterActivationFilter;
 	}
 
 	@Bean
@@ -39,7 +42,8 @@ public class SecurityConfig {
 			)
 			.httpBasic(Customizer.withDefaults())
 			.authenticationProvider(authenticationProvider())
-			.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+			.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+			.addFilterAfter(tenantFilterActivationFilter, JwtAuthenticationFilter.class);
 		return http.build();
 	}
 

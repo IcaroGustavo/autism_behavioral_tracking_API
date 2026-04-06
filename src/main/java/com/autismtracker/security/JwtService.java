@@ -31,6 +31,10 @@ public class JwtService {
 		return claimsResolver.apply(claims);
 	}
 
+	public String extractTenantId(String token) {
+		return extractClaim(token, claims -> claims.get("tenant_id", String.class));
+	}
+
 	public String generateToken(String username, Map<String, Object> extraClaims) {
 		return Jwts.builder()
 			.setClaims(extraClaims)

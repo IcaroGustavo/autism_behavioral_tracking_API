@@ -6,6 +6,7 @@ Headers comuns (JWT):
 - Authorization: Bearer <TOKEN>
 - Content-Type: application/json
 - Accept: application/json
+- Observação multi-tenant: o cabeçalho `X-Tenant-ID` é utilizado APENAS no login para gerar o token já vinculado ao tenant correto. Os demais endpoints não requerem esse cabeçalho (o isolamento é automático via `tenant_id` do JWT).
 
 Observações:
 - Datas: use ISO 8601.
@@ -34,6 +35,7 @@ Exemplo cURL:
 curl -X POST "http://localhost:8080/api/auth/login" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
+  -H "X-Tenant-ID: tenant-abc" \
   -d '{
     "email": "parent@example.com",
     "password": "password"
@@ -46,6 +48,10 @@ Resposta esperada:
   "token": "JWT_AQUI"
 }
 ```
+
+Notas de segurança:
+- O JWT é curto (15 min) e NÃO contém PHI. Claims mínimos: `sub`, `tenant_id`, `roles`, `iat`, `exp`.
+- O isolamento de dados é automático por `tenant_id` via filtro do Hibernate (não é necessário enviar `X-Tenant-ID` após o login).
 
 No Postman: use o token retornado em "Authorization" > "Bearer Token".
 No bash, você pode exportar para facilitar:

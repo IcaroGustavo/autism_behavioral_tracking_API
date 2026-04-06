@@ -13,6 +13,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+import com.autismtracker.security.tenant.TenantContext;
+
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -46,10 +48,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 			UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 			if (jwtService.isTokenValid(jwt, userDetails.getUsername())) {
+				// Popular SecurityContext e TenantContext (sem PHI no token)
+				String tenantId = null;
+				try { tenantId = jwtService.extractTenantId(jwt); } catch (Exception ignored) {}
 				UsernamePasswordAuthenticationToken authToken =
 					new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
 				authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 				SecurityContextHolder.getContext().setAuthentication(authToken);
+				if (tenantId != null) {
+					TenantContext.setCurrentTenant(tenantId);
+				}
 			}
 		}
 		filterChain.doFilter(request, response);

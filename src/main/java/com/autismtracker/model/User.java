@@ -3,6 +3,7 @@ package com.autismtracker.model;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import com.autismtracker.security.tenant.BaseTenantEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -19,7 +20,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
-public class User {
+public class User extends BaseTenantEntity {
 
 	@Id
 	@GeneratedValue(generator = "UUID")

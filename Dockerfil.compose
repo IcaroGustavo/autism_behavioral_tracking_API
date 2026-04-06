@@ -35,6 +35,21 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: autism-tracker-ngrok
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      - "--log=stdout"
+      - "app:8080"
+    ports:
+      - "4040:4040" # ngrok web UI / API
+
 volumes:
   pgdata: {}
 

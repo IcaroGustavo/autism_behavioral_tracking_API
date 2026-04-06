@@ -1,5 +1,33 @@
 package com.autismtracker.security;
 
+import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class JwtServiceTest {
+
+	@Test
+	void shouldGenerateAndParseTenantIdClaim() {
+		JwtService svc = new JwtService();
+		// Injetando campos via reflexão para teste simples
+		TestUtils.setField(svc, "secretKeyBase64", "3q2+7wAAAAAAAAAAAAAAAAAAAAAAAABhYmNkZWZnaGlqa2xtbm9wcQ==");
+		TestUtils.setField(svc, "jwtExpirationMillis", 900000L);
+
+		Map<String, Object> claims = new HashMap<>();
+		claims.put("tenant_id", "tenant-abc");
+		String token = svc.generateToken("user@example.com", claims);
+
+		assertEquals("user@example.com", svc.extractUsername(token));
+		assertEquals("tenant-abc", svc.extractTenantId(token));
+		assertTrue(svc.isTokenValid(token, "user@example.com"));
+	}
+}
+
+package com.autismtracker.security;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;

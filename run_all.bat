@@ -1,6 +1,11 @@
 @echo off
 setlocal ENABLEDELAYEDEXPANSION
 
+REM ================= NGROK AUTHTOKEN =================
+if "%NGROK_AUTHTOKEN%"=="" (
+  set /p NGROK_AUTHTOKEN=Informe seu NGROK_AUTHTOKEN (ou deixe em branco para pular ngrok): 
+)
+
 echo [+] Subindo Postgres...
 docker run -d --name autism-tracker-db ^
   -e POSTGRES_DB=autism_tracker ^
@@ -36,6 +41,18 @@ docker run -d --name autism-tracker-app ^
 if errorlevel 1 (
   echo [!] Falha ao subir a aplicacao.
   exit /b 1
+)
+
+REM ================= SUBIR NGROK VIA COMPOSE (opcional) =================
+if not "%NGROK_AUTHTOKEN%"=="" (
+  echo [+] Subindo ngrok (expondo app:8080) via compose...
+  set NGROK_AUTHTOKEN=%NGROK_AUTHTOKEN%
+  docker compose -f Dockerfil.compose up -d --build ngrok
+  if errorlevel 1 (
+    echo [!] Falha ao subir o ngrok. Verifique o token e tente novamente.
+  ) else (
+    echo [OK] ngrok em execucao. Dashboard/API: http://localhost:4040
+  )
 )
 
 echo [OK] Aplicacao em execucao em http://localhost:8080

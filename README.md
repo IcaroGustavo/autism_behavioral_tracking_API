@@ -20,6 +20,34 @@ Use `POST /api/auth/login` com as credenciais seed:
 
 O serviço retorna um `token` (JWT). Utilize `Authorization: Bearer <TOKEN>` nos endpoints protegidos.
 
+### Multi‑tenancy (Shared DB + Discriminator)
+- Todas as entidades do domínio herdam `BaseTenantEntity` e possuem `tenant_id`. O isolamento é aplicado automaticamente via Hibernate Filter.
+- O `tenant_id` é propagado no contexto pelo `JwtAuthenticationFilter` lendo o claim `tenant_id` do JWT.
+- Durante o login, informe o cabeçalho `X-Tenant-ID` para incluir o tenant correto no token:
+  - Exemplo: `POST /api/auth/login` com header `X-Tenant-ID: tenant-abc`.
+- Nunca inclua PHI no token. O token contém apenas: `sub`, `tenant_id`, `roles`, `iat`, `exp`.
+
+### Segurança (JWT curto e sem PHI)
+- Access Token com TTL curto (15 minutos): `app.security.jwt.expirationMillis=900000`.
+- O token é assinado HS256 com segredo base64 em `app.security.jwt.secret`.
+- Não há PHI, apenas metadados mínimos para autorização e isolamento.
+
+### Auditoria
+- `AuditLog` registra eventos sensíveis (`who/when/what`) de forma append-only.
+- `AuditingConfig` + `AuditorAwareImpl` preenchem automaticamente o “quem” via `SecurityContext`.
+- Recomendado: armazenar cópias WORM (S3/GCS) e bloquear UPDATE/DELETE em `audit_logs` via política/trigger.
+
+### Entidades avançadas
+- `PhysiologicalMetric`: integra dados de wearables (HR, HRV, SpO2, etc.).
+- `PredictiveTrigger`: correlaciona ABC (Antecedent/Behavior/Consequence) com fatores ambientais (sono, dieta, clima).
+
+### Testes
+- Adicionados testes unitários para:
+  - `JwtService` (claims mínimos e extração de `tenant_id`)
+  - `AuditLogger` (persistência com `tenant_id` do contexto)
+  - `TenantFilterActivationFilter` (habilitação do filtro Hibernate por requisição)
+
+
 ### Execução local
 1. Java 17+ e Maven/Gradle configurados
 2. Rodar a aplicação (ex.: pelo IDE ou `mvn spring-boot:run`)
