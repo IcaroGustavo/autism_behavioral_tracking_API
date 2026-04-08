@@ -2,8 +2,10 @@ package com.autismtracker.controller;
 
 import com.autismtracker.dto.BehaviorEventDtos;
 import com.autismtracker.model.User;
+import com.autismtracker.model.UserRole;
 import com.autismtracker.service.BehaviorEventService;
 import com.autismtracker.service.UserService;
+import com.autismtracker.repository.ProfessionalAssignmentRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -17,10 +19,12 @@ public class BehaviorEventController {
 
 	private final BehaviorEventService behaviorEventService;
 	private final UserService userService;
+	private final ProfessionalAssignmentRepository assignmentRepository;
 
-	public BehaviorEventController(BehaviorEventService behaviorEventService, UserService userService) {
+	public BehaviorEventController(BehaviorEventService behaviorEventService, UserService userService, ProfessionalAssignmentRepository assignmentRepository) {
 		this.behaviorEventService = behaviorEventService;
 		this.userService = userService;
+		this.assignmentRepository = assignmentRepository;
 	}
 
 	@PostMapping
@@ -32,9 +36,20 @@ public class BehaviorEventController {
 	}
 
 	@GetMapping
-	public ResponseEntity<List<BehaviorEventDtos.EventResponse>> list(Authentication authentication) {
-		User user = userService.findByEmail(authentication.getName()).orElseThrow();
-		return ResponseEntity.ok(behaviorEventService.list(user));
+	public ResponseEntity<List<BehaviorEventDtos.EventResponse>> list(
+		@RequestParam(required = false) UUID parentId,
+		Authentication authentication) {
+		User requester = userService.findByEmail(authentication.getName()).orElseThrow();
+
+		User target = requester;
+		if (parentId != null && requester.getRole() == UserRole.PROFESSIONAL) {
+			boolean allowed = assignmentRepository.existsByProfessionalIdAndParentIdAndActiveTrue(requester.getId(), parentId);
+			if (allowed) {
+				target = userService.findById(parentId).orElseThrow();
+			}
+		}
+
+		return ResponseEntity.ok(behaviorEventService.list(target));
 	}
 
 	@PutMapping("/{id}")
