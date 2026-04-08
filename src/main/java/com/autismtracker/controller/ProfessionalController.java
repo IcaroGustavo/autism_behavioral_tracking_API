@@ -3,16 +3,20 @@ package com.autismtracker.controller;
 import com.autismtracker.dto.ProfessionalDtos;
 import com.autismtracker.model.ProfessionalAssignment;
 import com.autismtracker.model.ProfessionalInvitation;
+import com.autismtracker.model.ProfessionalProfile;
 import com.autismtracker.model.User;
 import com.autismtracker.model.UserRole;
 import com.autismtracker.repository.ProfessionalAssignmentRepository;
 import com.autismtracker.repository.ProfessionalInvitationRepository;
+import com.autismtracker.repository.ProfessionalProfileRepository;
 import com.autismtracker.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,11 +28,13 @@ public class ProfessionalController {
 
 	private final ProfessionalAssignmentRepository assignmentRepository;
 	private final ProfessionalInvitationRepository invitationRepository;
+	private final ProfessionalProfileRepository profileRepository;
 	private final UserService userService;
 
-	public ProfessionalController(ProfessionalAssignmentRepository assignmentRepository, ProfessionalInvitationRepository invitationRepository, UserService userService) {
+	public ProfessionalController(ProfessionalAssignmentRepository assignmentRepository, ProfessionalInvitationRepository invitationRepository, ProfessionalProfileRepository profileRepository, UserService userService) {
 		this.assignmentRepository = assignmentRepository;
 		this.invitationRepository = invitationRepository;
+		this.profileRepository = profileRepository;
 		this.userService = userService;
 	}
 
@@ -48,11 +54,33 @@ public class ProfessionalController {
 		return ResponseEntity.ok(list);
 	}
 
+	@GetMapping("/me/profile")
+	@PreAuthorize("hasRole('PROFESSIONAL')")
+	public ResponseEntity<?> myProfile(Authentication authentication) {
+		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
+		return profileRepository.findByUserId(professional.getId())
+			.<ResponseEntity<?>>map(p -> ResponseEntity.ok(Map.of(
+				"userId", professional.getId(),
+				"name", professional.getName(),
+				"email", professional.getEmail(),
+				"specialty", p.getSpecialty().name(),
+				"registrationNumber", p.getRegistrationNumber()
+			)))
+			.orElse(ResponseEntity.ok(Map.of(
+				"userId", professional.getId(),
+				"name", professional.getName(),
+				"email", professional.getEmail(),
+				"specialty", null,
+				"registrationNumber", null
+			)));
+	}
+
 	// CONVITES
 	@GetMapping("/invitations/for-professional")
 	@PreAuthorize("hasRole('PROFESSIONAL')")
 	public ResponseEntity<List<ProfessionalInvitation>> listInvitationsForProfessional(Authentication authentication) {
 		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
+		autoExpireOldInvites();
 		return ResponseEntity.ok(invitationRepository.findByProfessionalEmailAndStatus(
 			professional.getEmail(), ProfessionalInvitation.Status.PENDING
 		));
@@ -62,6 +90,7 @@ public class ProfessionalController {
 	@PreAuthorize("hasRole('PARENT')")
 	public ResponseEntity<List<ProfessionalInvitation>> listInvitationsByParent(Authentication authentication) {
 		User parent = userService.findByEmail(authentication.getName()).orElseThrow();
+		autoExpireOldInvites();
 		return ResponseEntity.ok(invitationRepository.findByInviterParentId(parent.getId()));
 	}
 
@@ -90,6 +119,11 @@ public class ProfessionalController {
 			.filter(inv -> inv.getStatus() == ProfessionalInvitation.Status.PENDING)
 			.filter(inv -> inv.getProfessionalEmail().equalsIgnoreCase(professional.getEmail()))
 			.map(inv -> {
+				if (isExpired(inv)) {
+					inv.setStatus(ProfessionalInvitation.Status.EXPIRED);
+					invitationRepository.save(inv);
+					return ResponseEntity.status(410).body(Map.of("error", "Convite expirado"));
+				}
 				// Cria vínculo se não existir
 				if (!assignmentRepository.existsByProfessionalIdAndParentIdAndActiveTrue(professional.getId(), inv.getInviterParent().getId())) {
 					ProfessionalAssignment a = new ProfessionalAssignment();
@@ -104,6 +138,44 @@ public class ProfessionalController {
 			.orElse(ResponseEntity.status(404).body(Map.of("error", "Convite não encontrado ou inválido")));
 	}
 
+	@PostMapping("/invitations/{id}/reject")
+	@PreAuthorize("hasRole('PROFESSIONAL')")
+	public ResponseEntity<?> rejectInvitation(@PathVariable UUID id, Authentication authentication) {
+		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
+		return invitationRepository.findById(id)
+			.filter(inv -> inv.getStatus() == ProfessionalInvitation.Status.PENDING)
+			.filter(inv -> inv.getProfessionalEmail().equalsIgnoreCase(professional.getEmail()))
+			.map(inv -> {
+				if (isExpired(inv)) {
+					inv.setStatus(ProfessionalInvitation.Status.EXPIRED);
+				} else {
+					inv.setStatus(ProfessionalInvitation.Status.REJECTED);
+				}
+				invitationRepository.save(inv);
+				return ResponseEntity.ok(Map.of("status", "updated", "newStatus", inv.getStatus().name()));
+			})
+			.orElse(ResponseEntity.status(404).body(Map.of("error", "Convite não encontrado ou inválido")));
+	}
+
+	private boolean isExpired(ProfessionalInvitation inv) {
+		OffsetDateTime threshold = OffsetDateTime.now().minus(30, ChronoUnit.DAYS);
+		return inv.getCreatedAt().isBefore(threshold);
+	}
+
+	private void autoExpireOldInvites() {
+		OffsetDateTime threshold = OffsetDateTime.now().minus(30, ChronoUnit.DAYS);
+		var all = invitationRepository.findAll();
+		boolean changed = false;
+		for (var inv : all) {
+			if (inv.getStatus() == ProfessionalInvitation.Status.PENDING && inv.getCreatedAt().isBefore(threshold)) {
+				inv.setStatus(ProfessionalInvitation.Status.EXPIRED);
+				changed = true;
+			}
+		}
+		if (changed) {
+			invitationRepository.saveAll(all);
+		}
+	}
 	@PostMapping("/assignments")
 	@PreAuthorize("hasAnyRole('PROFESSIONAL','PARENT')")
 	public ResponseEntity<?> createAssignment(
