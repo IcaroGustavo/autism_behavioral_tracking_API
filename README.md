@@ -17,6 +17,7 @@ API REST para registro de eventos comportamentais, logs diários e análises.
 Use `POST /api/auth/login` com as credenciais seed:
 - `parent@example.com` / `password`
 - `therapist@example.com` / `password`
+- `pro@example.com` / `password` (papel PROFESSIONAL com perfil de exemplo)
 
 O serviço retorna um `token` (JWT). Utilize `Authorization: Bearer <TOKEN>` nos endpoints protegidos.
 
@@ -31,6 +32,32 @@ O serviço retorna um `token` (JWT). Utilize `Authorization: Bearer <TOKEN>` nos
 - Access Token com TTL curto (15 minutos): `app.security.jwt.expirationMillis=900000`.
 - O token é assinado HS256 com segredo base64 em `app.security.jwt.secret`.
 - Não há PHI, apenas metadados mínimos para autorização e isolamento.
+
+### Profissionais (perfil, vínculos e convites)
+- Papéis: `PARENT`, `THERAPIST`, `PROFESSIONAL`
+- Especialidades suportadas: `NEUROPEDIATRIA`, `FONOAUDIOLOGIA`, `TERAPIA_OCUPACIONAL`, `TCC`
+
+Endpoints principais:
+- `GET /api/professionals/me/profile` – retorna nome, e-mail, especialidade e registro do profissional autenticado
+- `PUT /api/professionals/me/profile?specialty=...&registrationNumber=...` – atualiza especialidade e registro
+- `GET /api/professionals/patients` – lista pacientes vinculados ao profissional (paginado; `page`, `size`, `sort`)
+- `POST /api/professionals/assignments?parentId=...` – cria vínculo (profissional → responsável)
+- `DELETE /api/professionals/assignments?parentId=...` – remove vínculo
+- `GET /api/professionals/invitations/for-professional` – convites pendentes para o e‑mail do profissional (paginado)
+- `GET /api/professionals/invitations/by-parent` – convites enviados pelo responsável (paginado)
+- `POST /api/professionals/invitations?professionalEmail=...&message=...` – responsável convida profissional
+- `POST /api/professionals/invitations/{id}/accept` – profissional aceita convite (cria vínculo)
+- `POST /api/professionals/invitations/{id}/reject` – profissional rejeita convite
+
+Configuração:
+- `app.invitation.expireDays` (default: 30) define o prazo de expiração automática de convites pendentes.
+
+Regras de acesso a dados:
+- Profissional pode ler dados (eventos/logs) de um responsável apenas se houver vínculo ativo.
+- Em `GET /api/events` e `GET /api/daily-logs` use `parentId` para consultar dados de um paciente específico; o backend valida o vínculo.
+
+Autorização por especialidade:
+- Exemplo aplicado em `GET /api/events/analysis/triggers` exigindo `NEUROPEDIATRIA` para profissionais (`@PreAuthorize` com `@profAccess`). 
 
 ### Auditoria
 - `AuditLog` registra eventos sensíveis (`who/when/what`) de forma append-only.
@@ -111,3 +138,6 @@ mvn -q -e test
 ```
 
 Observação: o build de imagem Docker usa `-Dmaven.test.skip=true` para agilizar empacotamento do container.
+
+### Observação de segurança
+- Não commitar segredos reais. O arquivo `ngrok.env.example` deve conter apenas placeholders. Gere e use seus tokens via variável de ambiente local.

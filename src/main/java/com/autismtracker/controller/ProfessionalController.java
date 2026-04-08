@@ -11,6 +11,9 @@ import com.autismtracker.repository.ProfessionalInvitationRepository;
 import com.autismtracker.repository.ProfessionalProfileRepository;
 import com.autismtracker.service.UserService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -40,9 +43,11 @@ public class ProfessionalController {
 
 	@GetMapping("/patients")
 	@PreAuthorize("hasRole('PROFESSIONAL')")
-	public ResponseEntity<List<ProfessionalDtos.PatientSummary>> listPatients(Authentication authentication) {
+	public ResponseEntity<Page<ProfessionalDtos.PatientSummary>> listPatients(
+		@PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable,
+		Authentication authentication) {
 		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
-		var list = assignmentRepository.findByProfessionalIdAndActiveTrue(professional.getId()).stream()
+		var page = assignmentRepository.findByProfessionalIdAndActiveTrue(professional.getId(), pageable)
 			.map(a -> {
 				User p = a.getParent();
 				var dto = new ProfessionalDtos.PatientSummary();
@@ -50,8 +55,8 @@ public class ProfessionalController {
 				dto.setName(p.getName());
 				dto.setEmail(p.getEmail());
 				return dto;
-			}).collect(Collectors.toList());
-		return ResponseEntity.ok(list);
+			});
+		return ResponseEntity.ok(page);
 	}
 
 	@GetMapping("/me/profile")
@@ -75,23 +80,57 @@ public class ProfessionalController {
 			)));
 	}
 
+	@PutMapping("/me/profile")
+	@PreAuthorize("hasRole('PROFESSIONAL')")
+	public ResponseEntity<?> updateMyProfile(
+		@RequestParam String specialty,
+		@RequestParam(required = false) String registrationNumber,
+		Authentication authentication
+	) {
+		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
+		var profile = profileRepository.findByUserId(professional.getId())
+			.orElseGet(() -> {
+				var p = new ProfessionalProfile();
+				p.setUser(professional);
+				return p;
+			});
+		try {
+			profile.setSpecialty(Enum.valueOf(com.autismtracker.model.ProfessionalSpecialty.class, specialty.toUpperCase()));
+		} catch (IllegalArgumentException ex) {
+			return ResponseEntity.badRequest().body(Map.of("error", "Especialidade inválida"));
+		}
+		profile.setRegistrationNumber(registrationNumber);
+		profileRepository.save(profile);
+		return ResponseEntity.ok(Map.of(
+			"userId", professional.getId(),
+			"name", professional.getName(),
+			"email", professional.getEmail(),
+			"specialty", profile.getSpecialty().name(),
+			"registrationNumber", profile.getRegistrationNumber()
+		));
+	}
+
 	// CONVITES
 	@GetMapping("/invitations/for-professional")
 	@PreAuthorize("hasRole('PROFESSIONAL')")
-	public ResponseEntity<List<ProfessionalInvitation>> listInvitationsForProfessional(Authentication authentication) {
+	public ResponseEntity<Page<ProfessionalInvitation>> listInvitationsForProfessional(
+		@PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable,
+		Authentication authentication) {
 		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
 		autoExpireOldInvites();
 		return ResponseEntity.ok(invitationRepository.findByProfessionalEmailAndStatus(
-			professional.getEmail(), ProfessionalInvitation.Status.PENDING
+			professional.getEmail(), ProfessionalInvitation.Status.PENDING, pageable
 		));
 	}
 
 	@GetMapping("/invitations/by-parent")
 	@PreAuthorize("hasRole('PARENT')")
-	public ResponseEntity<List<ProfessionalInvitation>> listInvitationsByParent(Authentication authentication) {
+	public ResponseEntity<Page<ProfessionalInvitation>> listInvitationsByParent(
+		@PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable,
+		Authentication authentication) {
 		User parent = userService.findByEmail(authentication.getName()).orElseThrow();
 		autoExpireOldInvites();
-		return ResponseEntity.ok(invitationRepository.findByInviterParentId(parent.getId()));
+		return ResponseEntity.ok(invitationRepository.findByInviterParentId(parent.getId(), pageable));
 	}
 
 	@PostMapping("/invitations")
@@ -157,13 +196,16 @@ public class ProfessionalController {
 			.orElse(ResponseEntity.status(404).body(Map.of("error", "Convite não encontrado ou inválido")));
 	}
 
+	@org.springframework.beans.factory.annotation.Value("${app.invitation.expireDays:30}")
+	private int invitationExpireDays;
+
 	private boolean isExpired(ProfessionalInvitation inv) {
-		OffsetDateTime threshold = OffsetDateTime.now().minus(30, ChronoUnit.DAYS);
+		OffsetDateTime threshold = OffsetDateTime.now().minus(invitationExpireDays, ChronoUnit.DAYS);
 		return inv.getCreatedAt().isBefore(threshold);
 	}
 
 	private void autoExpireOldInvites() {
-		OffsetDateTime threshold = OffsetDateTime.now().minus(30, ChronoUnit.DAYS);
+		OffsetDateTime threshold = OffsetDateTime.now().minus(invitationExpireDays, ChronoUnit.DAYS);
 		var all = invitationRepository.findAll();
 		boolean changed = false;
 		for (var inv : all) {
