@@ -4,7 +4,7 @@ WORKDIR /app
 COPY pom.xml .
 RUN --mount=type=cache,target=/root/.m2 mvn -q -e -DskipTests dependency:go-offline
 COPY src ./src
-RUN --mount=type=cache,target=/root/.m2 mvn -q -e -DskipTests clean package
+RUN --mount=type=cache,target=/root/.m2 mvn -q -e -Dmaven.test.skip=true clean package
 
 # ====== Runtime stage (slim) ======
 FROM eclipse-temurin:21-jre-alpine AS runtime

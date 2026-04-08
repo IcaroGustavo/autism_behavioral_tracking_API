@@ -7,6 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import com.autismtracker.security.tenant.TenantContext;
 
 @Configuration
 public class DataInitializer {
@@ -14,6 +15,8 @@ public class DataInitializer {
 	@Bean
 	public CommandLineRunner seedDefaultUsers(UserRepository userRepository, PasswordEncoder passwordEncoder) {
 		return args -> {
+			// Define um tenant padrão para o seed inicial (evita falha no @PrePersist)
+			TenantContext.setCurrentTenant("default");
 			if (!userRepository.existsByEmail("parent@example.com")) {
 				User parent = new User();
 				parent.setName("Default Parent");
@@ -30,6 +33,7 @@ public class DataInitializer {
 				therapist.setRole(UserRole.THERAPIST);
 				userRepository.save(therapist);
 			}
+			TenantContext.clear();
 		};
 	}
 }
