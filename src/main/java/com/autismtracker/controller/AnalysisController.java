@@ -4,6 +4,7 @@ import com.autismtracker.model.User;
 import com.autismtracker.service.AnalysisService;
 import com.autismtracker.service.UserService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +26,7 @@ public class AnalysisController {
 	}
 
 	@GetMapping("/triggers")
+	@PreAuthorize("!hasRole('PROFESSIONAL') or @profAccess.hasSpecialty(authentication.name, 'NEUROPEDIATRIA')")
 	public ResponseEntity<Map<String, Long>> triggers(@RequestParam(defaultValue = "10") int limit,
 	                                                  Authentication authentication) {
 		User user = userService.findByEmail(authentication.getName()).orElseThrow();

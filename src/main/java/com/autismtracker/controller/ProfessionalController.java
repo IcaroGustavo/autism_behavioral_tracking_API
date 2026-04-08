@@ -2,9 +2,11 @@ package com.autismtracker.controller;
 
 import com.autismtracker.dto.ProfessionalDtos;
 import com.autismtracker.model.ProfessionalAssignment;
+import com.autismtracker.model.ProfessionalInvitation;
 import com.autismtracker.model.User;
 import com.autismtracker.model.UserRole;
 import com.autismtracker.repository.ProfessionalAssignmentRepository;
+import com.autismtracker.repository.ProfessionalInvitationRepository;
 import com.autismtracker.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,10 +23,12 @@ import java.util.stream.Collectors;
 public class ProfessionalController {
 
 	private final ProfessionalAssignmentRepository assignmentRepository;
+	private final ProfessionalInvitationRepository invitationRepository;
 	private final UserService userService;
 
-	public ProfessionalController(ProfessionalAssignmentRepository assignmentRepository, UserService userService) {
+	public ProfessionalController(ProfessionalAssignmentRepository assignmentRepository, ProfessionalInvitationRepository invitationRepository, UserService userService) {
 		this.assignmentRepository = assignmentRepository;
+		this.invitationRepository = invitationRepository;
 		this.userService = userService;
 	}
 
@@ -42,6 +46,62 @@ public class ProfessionalController {
 				return dto;
 			}).collect(Collectors.toList());
 		return ResponseEntity.ok(list);
+	}
+
+	// CONVITES
+	@GetMapping("/invitations/for-professional")
+	@PreAuthorize("hasRole('PROFESSIONAL')")
+	public ResponseEntity<List<ProfessionalInvitation>> listInvitationsForProfessional(Authentication authentication) {
+		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
+		return ResponseEntity.ok(invitationRepository.findByProfessionalEmailAndStatus(
+			professional.getEmail(), ProfessionalInvitation.Status.PENDING
+		));
+	}
+
+	@GetMapping("/invitations/by-parent")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<List<ProfessionalInvitation>> listInvitationsByParent(Authentication authentication) {
+		User parent = userService.findByEmail(authentication.getName()).orElseThrow();
+		return ResponseEntity.ok(invitationRepository.findByInviterParentId(parent.getId()));
+	}
+
+	@PostMapping("/invitations")
+	@PreAuthorize("hasRole('PARENT')")
+	public ResponseEntity<?> createInvitation(
+		@RequestParam String professionalEmail,
+		@RequestParam(required = false) String message,
+		Authentication authentication
+	) {
+		User parent = userService.findByEmail(authentication.getName()).orElseThrow();
+		ProfessionalInvitation inv = new ProfessionalInvitation();
+		inv.setInviterParent(parent);
+		inv.setProfessionalEmail(professionalEmail.trim().toLowerCase());
+		inv.setMessage(message);
+		inv.setStatus(ProfessionalInvitation.Status.PENDING);
+		invitationRepository.save(inv);
+		return ResponseEntity.ok(Map.of("status", "invited", "invitationId", inv.getId()));
+	}
+
+	@PostMapping("/invitations/{id}/accept")
+	@PreAuthorize("hasRole('PROFESSIONAL')")
+	public ResponseEntity<?> acceptInvitation(@PathVariable UUID id, Authentication authentication) {
+		User professional = userService.findByEmail(authentication.getName()).orElseThrow();
+		return invitationRepository.findById(id)
+			.filter(inv -> inv.getStatus() == ProfessionalInvitation.Status.PENDING)
+			.filter(inv -> inv.getProfessionalEmail().equalsIgnoreCase(professional.getEmail()))
+			.map(inv -> {
+				// Cria vínculo se não existir
+				if (!assignmentRepository.existsByProfessionalIdAndParentIdAndActiveTrue(professional.getId(), inv.getInviterParent().getId())) {
+					ProfessionalAssignment a = new ProfessionalAssignment();
+					a.setProfessional(professional);
+					a.setParent(inv.getInviterParent());
+					assignmentRepository.save(a);
+				}
+				inv.setStatus(ProfessionalInvitation.Status.ACCEPTED);
+				invitationRepository.save(inv);
+				return ResponseEntity.ok(Map.of("status", "accepted"));
+			})
+			.orElse(ResponseEntity.status(404).body(Map.of("error", "Convite não encontrado ou inválido")));
 	}
 
 	@PostMapping("/assignments")

@@ -67,17 +67,24 @@ docker run --name autism-tracker-app --rm -p 8080:8080 \
   autism-tracker-api:latest
 ```
 
-### Executar com Docker Compose (app + Postgres)
-Um compose foi fornecido (nome do arquivo: `Dockerfil.compose`). Para subir banco e app juntos:
+### Executar com Docker Compose (app + Postgres + ngrok)
+Um compose padrão foi adicionado (`docker-compose.yml`). Para subir banco, app e ngrok juntos:
 
 ```bash
-docker compose -f Dockerfil.compose up -d --build
+cd C:\java\Estudos\projeto_autismo_back
+set NGROK_AUTHTOKEN=SEU_TOKEN_NGROK
+docker compose up -d --build
 ```
 
 Isso irá:
-- subir `postgres:16-alpine` em `localhost:5432` (db=autism_tracker, user=postgres, pass=postgres)
-- aguardar o banco ficar saudável
-- subir a aplicação em `localhost:8080`
+- subir `postgres:16-alpine` em `localhost:5432` (db=autism_tracker, user=postgres, pass=postgres);
+- aguardar o banco ficar saudável;
+- subir a aplicação em `localhost:8080`;
+- iniciar o túnel `ngrok` apontando para `app:8080` (dashboard em `http://localhost:4040`).
+
+Para ver a URL pública do ngrok (HTTPS), acesse `http://localhost:4040` e copie o campo `Forwarding`.
+No app mobile, em “Host customizado”, utilize a URL com sufixo `/api`, por exemplo:
+`https://<subdominio>.ngrok-free.app/api`.
 
 ### Scripts Windows (sem YAML)
 Para quem prefere evitar YAML, há scripts `.bat`:
@@ -95,3 +102,12 @@ down.bat
 ```
 
 Os scripts usam `docker run` e configuram as variáveis necessárias (Postgres + app). Certifique-se que o Docker Desktop esteja em execução.
+
+### Testes
+Para executar os testes localmente:
+
+```bash
+mvn -q -e test
+```
+
+Observação: o build de imagem Docker usa `-Dmaven.test.skip=true` para agilizar empacotamento do container.

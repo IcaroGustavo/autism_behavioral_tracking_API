@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: autism-tracker-db
+    environment:
+      - POSTGRES_DB=autism_tracker
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d autism_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: autism-tracker-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/autism_tracker
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - APP_SECURITY_JWT_SECRET=3q2+7wAAAAAAAAAAAAAAAAAAAAAAAABhYmNkZWZnaGlqa2xtbm9wcQ==
+      - APP_SECURITY_JWT_EXPIRATIONMILLIS=3600000
+      - SERVER_PORT=8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: autism-tracker-ngrok
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      - "--log=stdout"
+      - "app:8080"
+    ports:
+      - "4040:4040" # ngrok web UI / API
+
+volumes:
+  pgdata: {}
+
