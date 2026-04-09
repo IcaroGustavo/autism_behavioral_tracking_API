@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.GenericGenerator;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -43,7 +42,5 @@ public class ProfessionalAssignment extends BaseTenantEntity {
 	@Column(name = "notes", length = 500)
 	private String notes;
 
-	@Column(name = "created_at", nullable = false)
-	private OffsetDateTime createdAt = OffsetDateTime.now();
 }
 

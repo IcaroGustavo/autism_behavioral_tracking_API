@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.GenericGenerator;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -49,7 +48,5 @@ public class ProfessionalInvitation extends BaseTenantEntity {
 	@Column(name = "message", length = 500)
 	private String message;
 
-	@Column(name = "created_at", nullable = false)
-	private OffsetDateTime createdAt = OffsetDateTime.now();
 }
 
